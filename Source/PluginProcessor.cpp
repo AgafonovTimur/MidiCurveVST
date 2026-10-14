@@ -41,11 +41,11 @@ void MidiCurveProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         const auto size = meta.numBytes;
 
         // нажатие ноты (Note On с velocity больше 0) — меняем velocity по кривой.
-        // Если кривая даёт 0, так и отправляем 0.
+        // Меньше 1 не отправляем: Note On с velocity 0 DAW приняла бы за отпускание клавиши.
         if (size == 3 && (data[0] & 0xf0) == 0x90 && data[2] > 0)
         {
             const auto inVelocity  = (int) (data[2] & 0x7f);
-            const auto outVelocity = lookup[(size_t) inVelocity].load (std::memory_order_relaxed);
+            const auto outVelocity = (juce::uint8) juce::jmax (1, (int) lookup[(size_t) inVelocity].load (std::memory_order_relaxed));
 
             const juce::uint8 bytes[3] = { data[0], data[1], outVelocity };
             processed.addEvent (bytes, 3, meta.samplePosition);
@@ -53,6 +53,7 @@ void MidiCurveProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             lastIn.store (inVelocity);
             lastOut.store ((int) outVelocity);
             messageCounter.fetch_add (1);
+            playedNotes.push ((juce::uint8) inVelocity, outVelocity, 0);
         }
         else
         {
@@ -119,6 +120,12 @@ void MidiCurveProcessor::setProfileName (const juce::String& name)
     notifyHostAboutChange();
 }
 
+void MidiCurveProcessor::setShowPlayedNotes (bool shouldShow)
+{
+    showPlayedNotes = shouldShow;
+    notifyHostAboutChange();
+}
+
 void MidiCurveProcessor::notifyHostAboutChange()
 {
     // DAW должна понять, что проект изменился и его надо сохранить
@@ -140,6 +147,7 @@ void MidiCurveProcessor::getStateInformation (juce::MemoryBlock& destData)
     state.setProperty ("profile", getProfileName(), nullptr);
     state.setProperty ("language", getLanguage(), nullptr);
     state.setProperty ("scale", editorScale, nullptr);
+    state.setProperty ("showPlayedNotes", showPlayedNotes.load(), nullptr);
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -169,6 +177,7 @@ void MidiCurveProcessor::setStateInformation (const void* data, int sizeInBytes)
         }
 
         language = ((int) state.getProperty ("language", (int) language.load()) == english) ? english : russian;
+        showPlayedNotes = (bool) state.getProperty ("showPlayedNotes", false);
         editorScale = juce::jlimit (0.5, 3.0, (double) state.getProperty ("scale", editorScale));
 
         rebuildLookup();

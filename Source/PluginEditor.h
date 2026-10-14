@@ -63,6 +63,7 @@ public:
 
     // вызывается таймером окна
     void refreshLastMessage();
+    void pollPlayedNotes();
     void reloadFromProcessor();
 
 private:
@@ -95,6 +96,7 @@ private:
     juce::Label lastTitle, inLabel, outLabel;
     juce::Label pointTitle, pointHint, xCaption, yCaption;
     juce::TextEditor xEdit, yEdit;
+    juce::ToggleButton showNotesToggle;
 
     juce::Label profileTitle;
     juce::TextButton profileButton, saveCurrentButton, saveAsButton,

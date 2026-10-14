@@ -156,6 +156,15 @@ EditorContent::EditorContent (MidiCurveProcessor& p)
         field->onEscapeKey = [this] { updatePointFields(); };
     }
 
+    // --- Показывать нажатые ноты (по умолчанию выключено) ---
+    showNotesToggle.onClick = [this]
+    {
+        processor.setShowPlayedNotes (showNotesToggle.getToggleState());
+
+        if (! showNotesToggle.getToggleState())
+            curveView.clearPlayedNotes();
+    };
+
     // --- Профиль ---
     setupLabel (profileTitle, 14.0f, true, juce::Justification::centredLeft);
 
@@ -196,7 +205,7 @@ EditorContent::EditorContent (MidiCurveProcessor& p)
 
     for (juce::Component* c : std::initializer_list<juce::Component*> {
              &lastTitle, &inLabel, &outLabel,
-             &pointTitle, &pointHint, &xCaption, &yCaption, &xEdit, &yEdit,
+             &pointTitle, &pointHint, &xCaption, &yCaption, &xEdit, &yEdit, &showNotesToggle,
              &profileTitle, &profileButton, &saveCurrentButton, &saveAsButton,
              &importButton, &exportButton, &folderButton,
              &resetButton, &helpButton, &russianButton, &englishButton })
@@ -242,6 +251,8 @@ void EditorContent::applyLanguage()
     lastTitle.setText (texts.lastMessage, juce::dontSendNotification);
     pointTitle.setText (texts.point, juce::dontSendNotification);
     pointHint.setText (texts.pointHint, juce::dontSendNotification);
+    showNotesToggle.setButtonText (texts.showPlayedNotes);
+    showNotesToggle.setToggleState (processor.getShowPlayedNotes(), juce::dontSendNotification);
     profileTitle.setText (texts.profile, juce::dontSendNotification);
 
     saveCurrentButton.setButtonText (texts.saveCurrent);
@@ -259,6 +270,19 @@ void EditorContent::applyLanguage()
     updateProfileButton();
     updatePointFields();
     repaint();
+}
+
+void EditorContent::pollPlayedNotes()
+{
+    // очередь разбираем всегда, а отметки рисуем только при включённой галке
+    const bool show = showNotesToggle.getToggleState();
+    std::array<juce::uint8, 3> note {};
+
+    for (int i = 0; i < 256 && processor.popPlayedNote (note); ++i)
+        if (show)
+            curveView.addPlayedNote ((int) note[0], (int) note[1]);
+
+    curveView.updatePlayedNotes();
 }
 
 void EditorContent::refreshLastMessage()
@@ -626,7 +650,7 @@ void EditorContent::paint (juce::Graphics& g)
     const auto left  = panel.getX() + (float) panelPadding;
     const auto right = panel.getRight() - (float) panelPadding;
 
-    for (const auto y : { 84.0f, 172.0f, 438.0f })
+    for (const auto y : { 84.0f, 198.0f, 456.0f })
         g.drawLine (left, y, right, y, 1.0f);
 
     juce::AttributedString text;
@@ -658,20 +682,21 @@ void EditorContent::resized()
     yCaption.setBounds (x + half + 6, 118, 20, 26);
     yEdit.setBounds    (x + half + 28, 118, half - 22, 26);
     pointHint.setBounds (x, 146, w, 18);
+    showNotesToggle.setBounds (x, 168, w, 22);
 
     // Профиль
-    profileTitle.setBounds      (x, 180, w, 20);
-    profileButton.setBounds     (x, 204, w, 28);
-    saveCurrentButton.setBounds (x, 238, w, 28);
-    saveAsButton.setBounds      (x, 270, w, 28);
-    importButton.setBounds      (x, 302, half, 28);
-    exportButton.setBounds      (x + half + 6, 302, half, 28);
-    folderButton.setBounds      (x, 334, w, 28);
-    pathArea = juce::Rectangle<float> ((float) x, 368.0f, (float) w, 64.0f);
+    profileTitle.setBounds      (x, 206, w, 20);
+    profileButton.setBounds     (x, 230, w, 28);
+    saveCurrentButton.setBounds (x, 264, w, 28);
+    saveAsButton.setBounds      (x, 296, w, 28);
+    importButton.setBounds      (x, 328, half, 28);
+    exportButton.setBounds      (x + half + 6, 328, half, 28);
+    folderButton.setBounds      (x, 360, w, 28);
+    pathArea = juce::Rectangle<float> ((float) x, 394.0f, (float) w, 54.0f);
 
     // Reset / Help
-    resetButton.setBounds (x, 448, half, 28);
-    helpButton.setBounds  (x + half + 6, 448, half, 28);
+    resetButton.setBounds (x, 466, half, 28);
+    helpButton.setBounds  (x + half + 6, 466, half, 28);
 
     // язык — внизу справа, над уголком растягивания
     const int langY = logicalHeight - 20 - 30;
@@ -743,4 +768,5 @@ void MidiCurveEditor::timerCallback()
     }
 
     content.refreshLastMessage();
+    content.pollPlayedNotes();
 }

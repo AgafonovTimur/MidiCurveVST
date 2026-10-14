@@ -3,8 +3,46 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
 #include <atomic>
+#include <vector>
 
 #include "CurveModel.h"
+
+//==============================================================================
+//  Очередь коротких сообщений из потока звука в окно плагина.
+//  Пишет всегда один поток, читает другой, поэтому блокировки не нужны.
+//==============================================================================
+class SmallQueue
+{
+public:
+    SmallQueue() { storage.resize ((size_t) capacity); }
+
+    void push (juce::uint8 b0, juce::uint8 b1, juce::uint8 b2)
+    {
+        const auto scope = fifo.write (1);
+
+        if (scope.blockSize1 > 0)
+            storage[(size_t) scope.startIndex1] = { b0, b1, b2 };
+        else if (scope.blockSize2 > 0)
+            storage[(size_t) scope.startIndex2] = { b0, b1, b2 };
+        // очередь переполнена — сообщение теряется, это лучше, чем ждать в потоке звука
+    }
+
+    bool pop (std::array<juce::uint8, 3>& result)
+    {
+        const auto scope = fifo.read (1);
+
+        if (scope.blockSize1 > 0) { result = storage[(size_t) scope.startIndex1]; return true; }
+        if (scope.blockSize2 > 0) { result = storage[(size_t) scope.startIndex2]; return true; }
+
+        return false;
+    }
+
+private:
+    static constexpr int capacity = 512;
+
+    juce::AbstractFifo fifo { capacity };
+    std::vector<std::array<juce::uint8, 3>> storage;
+};
 
 //==============================================================================
 //  MidiCurveVST: меняет velocity нажатых нот по кривой.
@@ -58,6 +96,13 @@ public:
     int getLastOut() const noexcept      { return lastOut.load(); }
     int getMessageCounter() const noexcept { return messageCounter.load(); }
 
+    // сыгранные ноты для отметки на поле: [0] — пришедшая velocity, [1] — ушедшая
+    bool popPlayedNote (std::array<juce::uint8, 3>& note) { return playedNotes.pop (note); }
+
+    // галка «Показывать нажатые ноты»
+    bool getShowPlayedNotes() const noexcept { return showPlayedNotes.load(); }
+    void setShowPlayedNotes (bool shouldShow);
+
     // растёт, когда DAW загрузила настройки из проекта
     int getStateRevision() const noexcept { return stateRevision.load(); }
 
@@ -78,6 +123,9 @@ private:
     std::atomic<int> language { russian };
     std::atomic<int> lastIn { -1 }, lastOut { -1 }, messageCounter { 0 };
     std::atomic<int> stateRevision { 0 };
+    std::atomic<bool> showPlayedNotes { false };
+
+    SmallQueue playedNotes;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MidiCurveProcessor)
 };

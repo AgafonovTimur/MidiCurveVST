@@ -7,20 +7,43 @@
 //==============================================================================
 namespace Theme
 {
-    inline const juce::Colour background   { 0xff181818 };   // поле с точками
+    inline const juce::Colour background   { 0xff2a2a2a };   // поле с точками (светлее панели)
     inline const juce::Colour panel        { 0xff1e1e1e };   // правая панель
     inline const juce::Colour panelBorder  { 0xff333333 };
-    inline const juce::Colour grid         { 0xff2c2c2c };
-    inline const juce::Colour centreLine   { 0xff4a4a4a };
+    inline const juce::Colour grid         { 0xff3a3a3a };
     inline const juce::Colour button       { 0xff333333 };
     inline const juce::Colour buttonHover  { 0xff3d3d3d };
     inline const juce::Colour buttonActive { 0xff5a5a5a };
     inline const juce::Colour text         { 0xffd0d0d0 };
-    inline const juce::Colour textMuted    { 0xff7d7d7d };
+    inline const juce::Colour textMuted    { 0xff8a8a8a };
     inline const juce::Colour textHint     { 0xff5c5c5c };
-    inline const juce::Colour curve        { 0xffd0d0d0 };
+    inline const juce::Colour curve        { 0xffb0b0b0 };
     inline const juce::Colour menu         { 0xff2a2a2a };
     inline const juce::Colour menuHover    { 0xff424242 };
+
+    // цвета ступеней с круга квинт: тёмный вариант (плашки легенды) и светлый (клавиши)
+    inline const juce::Colour tonic        { 0xff689461 };   // тоника
+    inline const juce::Colour tonicLight   { 0xffa3b58f };
+    inline const juce::Colour third        { 0xff8f8869 };   // терция
+    inline const juce::Colour fifth        { 0xff697c8f };   // квинта
+    inline const juce::Colour seventh      { 0xff7c698f };   // септима
+    inline const juce::Colour seventhLight { 0xffa28fb5 };
+    inline const juce::Colour ninth        { 0xff698f8f };   // нона
+    inline const juce::Colour eleventh     { 0xff8f7c69 };   // ундецима
+    inline const juce::Colour thirteenth   { 0xff7d8f69 };   // терцдецима
+
+    // точки кривой
+    inline const juce::Colour point         = tonic;
+    inline const juce::Colour pointOutline  = tonicLight;
+    inline const juce::Colour pointSelected = tonicLight;
+
+    // ручки изгиба отрезка — жёлтые
+    inline const juce::Colour handle        { 0xffc9a04a };
+    inline const juce::Colour handleBent    { 0xffe0bc63 };
+    inline const juce::Colour handleOutline { 0xffeed38f };
+
+    // отметка нажатой ноты на поле
+    inline const juce::Colour noteMarker    = tonicLight;
 }
 
 //==============================================================================
@@ -84,6 +107,37 @@ public:
 
         g.setColour (colour);
         g.fillRoundedRectangle (bounds, 6.0f);
+    }
+
+    // галка — как в настройках Ear Trainer: квадрат 16x16, при включении серый с белой птичкой
+    void drawToggleButton (juce::Graphics& g, juce::ToggleButton& button,
+                           bool isHighlighted, bool) override
+    {
+        const auto bounds = button.getLocalBounds().toFloat();
+        const auto box = juce::Rectangle<float> (0.0f, (bounds.getHeight() - 16.0f) * 0.5f, 16.0f, 16.0f);
+
+        const bool on = button.getToggleState();
+
+        g.setColour (on ? Theme::buttonActive : (isHighlighted ? Theme::buttonHover : Theme::button));
+        g.fillRoundedRectangle (box, 3.0f);
+
+        if (on)
+        {
+            juce::Path tick;
+            tick.startNewSubPath (box.getX() + 3.8f, box.getCentreY() + 0.2f);
+            tick.lineTo (box.getX() + 6.8f, box.getBottom() - 4.0f);
+            tick.lineTo (box.getRight() - 3.5f, box.getY() + 4.0f);
+
+            g.setColour (juce::Colours::white);
+            g.strokePath (tick, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved,
+                                                      juce::PathStrokeType::rounded));
+        }
+
+        g.setColour (Theme::text.withMultipliedAlpha (button.isEnabled() ? 1.0f : 0.5f));
+        g.setFont (juce::FontOptions (13.5f));
+        g.drawFittedText (button.getButtonText(),
+                          bounds.withTrimmedLeft (box.getRight() + 8.0f).toNearestInt(),
+                          juce::Justification::centredLeft, 1, 1.0f);
     }
 
     juce::Font getTextButtonFont (juce::TextButton& button, int buttonHeight) override

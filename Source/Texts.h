@@ -9,7 +9,7 @@
 struct Texts
 {
     juce::String lastMessage, in, out;
-    juce::String point, pointHint;
+    juce::String point, pointHint, showPlayedNotes;
     juce::String profile, noProfile, emptyFolder;
     juce::String saveCurrent, saveAs, import, exportCurve, folder, profilesPath;
     juce::String reset, help, close;
@@ -33,6 +33,7 @@ struct Texts
             t.out          = u ("Out");
             t.point        = u ("Точка");
             t.pointHint    = u ("Выберите или поставьте точку");
+            t.showPlayedNotes = u ("Показывать нажатые ноты");
             t.profile      = u ("Профиль");
             t.noProfile    = u ("— не выбран —");
             t.emptyFolder  = u ("В папке нет профилей");
@@ -71,7 +72,7 @@ struct Texts
                 "MidiCurveVST меняет velocity нажатых нот по кривой. По горизонтали — velocity, "
                 "которая пришла (In), по вертикали — velocity, которая уйдёт дальше (Out). "
                 "Всё остальное (отпускания клавиш, CC, pitch bend и т.д.) проходит без изменений. "
-                "Если кривая даёт 0, нота уходит с velocity 0.\n"
+                "Velocity нажатой ноты не опускается ниже 1: даже если кривая даёт 0, нота уходит с velocity 1.\n"
                 "Чтобы ноты дошли до инструмента, выберите в MidiCurveVST MIDI output port, "
                 "а в инструменте — такой же input port.\n"
                 "\n"
@@ -107,6 +108,9 @@ struct Texts
                 "• Текущая кривая сохраняется и в проекте DAW, даже без профиля.\n"
                 "\n"
                 "# ПРОЧЕЕ\n"
+                "• Галка «Показывать нажатые ноты» (под координатами точки): при каждой сыгранной ноте на поле "
+                "появляется вертикальная черта на её velocity и отметка на кривой — с какой velocity нота ушла. "
+                "Отметки гаснут примерно за полторы секунды. По умолчанию галка выключена.\n"
                 "• «Сброс» — вернуть прямую от 0,0 до 127,127.\n"
                 "• «Последнее сообщение»: In — velocity последней пришедшей ноты, Out — velocity, "
                 "с которой она ушла.\n"
@@ -119,6 +123,7 @@ struct Texts
             t.out          = u ("Out");
             t.point        = u ("Point");
             t.pointHint    = u ("Select or add a point");
+            t.showPlayedNotes = u ("Show played notes");
             t.profile      = u ("Profile");
             t.noProfile    = u ("— none —");
             t.emptyFolder  = u ("No profiles in the folder");
@@ -157,7 +162,7 @@ struct Texts
                 "MidiCurveVST changes the velocity of played notes according to the curve. "
                 "Horizontal axis — incoming velocity (In), vertical axis — outgoing velocity (Out). "
                 "Everything else (note releases, CC, pitch bend, etc.) passes unchanged. "
-                "If the curve gives 0, the note is sent with velocity 0.\n"
+                "The velocity of a played note never goes below 1: even if the curve gives 0, the note is sent with velocity 1.\n"
                 "To get the notes to an instrument, choose a MIDI output port in MidiCurveVST "
                 "and the same input port in the instrument.\n"
                 "\n"
@@ -191,6 +196,9 @@ struct Texts
                 "• The current curve is also saved in the DAW project, even without a profile.\n"
                 "\n"
                 "# OTHER\n"
+                "• \"Show played notes\" checkbox (under the point coordinates): every played note shows a vertical "
+                "line at its velocity and a mark on the curve at the velocity it was sent with. "
+                "The marks fade out in about a second and a half. Off by default.\n"
                 "• \"Reset\" — back to a straight line from 0,0 to 127,127.\n"
                 "• \"Last Message\": In — velocity of the last incoming note, Out — velocity it was sent with.\n"
                 "• The plugin window resizes from the bottom-right corner, keeping its proportions.");

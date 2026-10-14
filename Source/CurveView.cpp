@@ -1,13 +1,14 @@
 #include "CurveView.h"
 #include "Theme.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace
 {
     constexpr float margin       = 10.0f;   // отступ, чтобы крайние точки не обрезались
-    constexpr float pointRadius  = 5.0f;
-    constexpr float handleRadius = 4.0f;
+    constexpr float pointRadius  = 5.5f;
+    constexpr float handleRadius = 4.5f;
     constexpr float pointHit     = 10.0f;   // радиус «попадания» мышью
     constexpr float handleHit    = 9.0f;
 }
@@ -47,6 +48,46 @@ void CurveView::setPointPosition (int index, int x, int y)
     curve.movePoint (index, x, y);
     repaint();
     changed (true);
+}
+
+//==============================================================================
+void CurveView::addPlayedNote (int inVelocity, int outVelocity)
+{
+    markers.push_back ({ inVelocity, outVelocity, juce::Time::getMillisecondCounterHiRes() });
+
+    if (markers.size() > 32)
+        markers.erase (markers.begin());
+
+    repaint();
+}
+
+void CurveView::clearPlayedNotes()
+{
+    if (! markers.empty())
+    {
+        markers.clear();
+        repaint();
+    }
+}
+
+float CurveView::markerAlpha (const NoteMarker& marker, double now) const
+{
+    return (float) juce::jlimit (0.0, 1.0, 1.0 - (now - marker.startTime) / markerFadeMs);
+}
+
+void CurveView::updatePlayedNotes()
+{
+    if (markers.empty())
+        return;
+
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+
+    markers.erase (std::remove_if (markers.begin(), markers.end(),
+                                   [this, now] (const NoteMarker& m) { return markerAlpha (m, now) <= 0.0f; }),
+                   markers.end());
+
+    // пока отметки гаснут — перерисовываем
+    repaint();
 }
 
 //==============================================================================
@@ -301,13 +342,13 @@ void CurveView::paint (juce::Graphics& g)
 
     const auto area = plotArea();
 
-    // сетка 8 x 8, центральные линии ярче
+    // сетка 8 x 8, все линии одного цвета
     for (int i = 1; i < 8; ++i)
     {
         const auto x = area.getX() + area.getWidth()  * (float) i / 8.0f;
         const auto y = area.getY() + area.getHeight() * (float) i / 8.0f;
 
-        g.setColour (i == 4 ? Theme::centreLine : Theme::grid);
+        g.setColour (Theme::grid);
         g.drawLine (x, area.getY(), x, area.getBottom(), 1.0f);
         g.drawLine (area.getX(), y, area.getRight(), y, 1.0f);
     }
@@ -334,6 +375,27 @@ void CurveView::paint (juce::Graphics& g)
                                                   juce::PathStrokeType::rounded));
     }
 
+    // отметки сыгранных нот: вертикальная черта на пришедшей velocity
+    // (точка на кривой рисуется ниже, поверх точек); постепенно гаснут
+    if (! markers.empty())
+    {
+        const auto now = juce::Time::getMillisecondCounterHiRes();
+
+        for (const auto& marker : markers)
+        {
+            const auto alpha = markerAlpha (marker, now);
+
+            if (alpha <= 0.0f)
+                continue;
+
+            const auto top    = toPixel (marker.in, Curve::maxValue);
+            const auto bottom = toPixel (marker.in, 0);
+
+            g.setColour (Theme::noteMarker.withAlpha (alpha * 0.85f));
+            g.drawLine (top.x, top.y, bottom.x, bottom.y, 2.0f);
+        }
+    }
+
     // ручки изгиба посередине отрезков
     for (int seg = 0; seg + 1 < curve.size(); ++seg)
     {
@@ -345,15 +407,12 @@ void CurveView::paint (juce::Graphics& g)
         const bool bent = std::abs (curve.getPoints()[(size_t) seg].bend) > 0.0;
         const auto r = active ? handleRadius + 1.5f : handleRadius;
 
-        g.setColour (Theme::background);
+        // ручка жёлтая; у изогнутого отрезка — светлее
+        g.setColour (bent ? Theme::handleBent : Theme::handle);
         g.fillEllipse (pos.x - r, pos.y - r, r * 2.0f, r * 2.0f);
 
-        g.setColour (active ? Theme::text : Theme::textMuted);
-
-        if (bent)
-            g.fillEllipse (pos.x - r + 2.0f, pos.y - r + 2.0f, r * 2.0f - 4.0f, r * 2.0f - 4.0f);
-
-        g.drawEllipse (pos.x - r, pos.y - r, r * 2.0f, r * 2.0f, 1.2f);
+        g.setColour (active ? juce::Colours::white : Theme::handleOutline);
+        g.drawEllipse (pos.x - r, pos.y - r, r * 2.0f, r * 2.0f, 1.5f);
     }
 
     // точки
@@ -365,11 +424,31 @@ void CurveView::paint (juce::Graphics& g)
         const bool isHover = (i == hoverPoint || i == dragPoint);
         const auto r = isSelected ? pointRadius + 1.5f : (isHover ? pointRadius + 1.0f : pointRadius);
 
-        g.setColour (isSelected ? Theme::curve : Theme::background);
+        g.setColour (isSelected ? Theme::pointSelected : Theme::point);
         g.fillEllipse (pos.x - r, pos.y - r, r * 2.0f, r * 2.0f);
 
-        g.setColour (isHover && ! isSelected ? juce::Colours::white : Theme::curve);
+        g.setColour (isSelected || isHover ? juce::Colours::white : Theme::pointOutline);
         g.drawEllipse (pos.x - r, pos.y - r, r * 2.0f, r * 2.0f, 1.6f);
+    }
+
+    // отметки сыгранных нот на кривой — поверх точек
+    if (! markers.empty())
+    {
+        const auto now = juce::Time::getMillisecondCounterHiRes();
+
+        for (const auto& marker : markers)
+        {
+            const auto alpha = markerAlpha (marker, now);
+
+            if (alpha <= 0.0f)
+                continue;
+
+            const auto dot = toPixel (marker.in, marker.out);
+            g.setColour (Theme::noteMarker.withAlpha (alpha));
+            g.fillEllipse (dot.x - 4.5f, dot.y - 4.5f, 9.0f, 9.0f);
+            g.setColour (juce::Colours::white.withAlpha (alpha));
+            g.drawEllipse (dot.x - 4.5f, dot.y - 4.5f, 9.0f, 9.0f, 1.2f);
+        }
     }
 
     // координаты в левом верхнем углу

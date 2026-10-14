@@ -22,6 +22,12 @@ public:
     // ввод координат вручную из правой панели
     void setPointPosition (int index, int x, int y);
 
+    // отметки сыгранных нот (галка «Показывать нажатые ноты»)
+    void addPlayedNote (int inVelocity, int outVelocity);
+    void clearPlayedNotes();
+    // вызывается таймером окна: гасит старые отметки
+    void updatePlayedNotes();
+
     // isFinal = false — точку ещё тянут мышью
     std::function<void (bool isFinal)> onCurveChanged;
     std::function<void()> onSelectionChanged;
@@ -51,7 +57,17 @@ private:
     void updateHover (juce::Point<float> pixel);
     void changed (bool isFinal);
 
+    struct NoteMarker
+    {
+        int in = 0, out = 0;
+        double startTime = 0.0;
+    };
+
+    static constexpr double markerFadeMs = 1500.0;
+    float markerAlpha (const NoteMarker& marker, double now) const;
+
     Curve curve;
+    std::vector<NoteMarker> markers;
 
     int selected    = -1;
     int dragPoint   = -1;
